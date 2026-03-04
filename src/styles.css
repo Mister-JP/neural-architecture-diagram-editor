@@ -99,6 +99,21 @@ canvas {
   cursor: pointer;
 }
 
+.panel-show-left,
+.panel-show-right {
+  position: fixed;
+  top: 14px;
+  z-index: 45;
+}
+
+.panel-show-left {
+  left: 14px;
+}
+
+.panel-show-right {
+  right: 14px;
+}
+
 .panel-header {
   display: flex;
   align-items: flex-start;
@@ -237,6 +252,53 @@ canvas {
   font: 700 11px/1.2 "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
   letter-spacing: 0.35px;
   text-transform: uppercase;
+}
+
+.section-hint {
+  margin: 2px 0 8px;
+  color: var(--text-muted);
+  font: 600 11px/1.35 "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+}
+
+.panel-section .button-row {
+  margin: 2px 0 6px;
+}
+
+.panel-section-collapsible {
+  padding: 10px;
+}
+
+.panel-section-collapsible > summary {
+  list-style: none;
+  margin: 0;
+  cursor: pointer;
+  color: #cceeff;
+  font: 700 11px/1.2 "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+}
+
+.panel-section-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel-section-collapsible > summary::before {
+  content: ">";
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 9px;
+  transition: transform 0.16s ease;
+}
+
+.panel-section-collapsible[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.collapsible-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .field-row {
@@ -433,7 +495,7 @@ canvas {
 
 .load-modal-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -464,8 +526,8 @@ canvas {
 }
 
 .inspector-action {
-  margin-top: 12px;
-  margin-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 10px;
   background: #185788;
 }
 
@@ -488,38 +550,8 @@ canvas {
   background: rgba(132, 40, 34, 0.95);
 }
 
-.view-gizmo {
-  position: fixed;
-  left: 18px;
-  bottom: 18px;
-  z-index: 35;
-  width: min(214px, calc(100vw - 36px));
-  border: 1px solid rgba(166, 223, 255, 0.52);
-  border-radius: 12px;
-  padding: 10px;
-  background: rgba(10, 24, 43, 0.9);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.3);
-}
-
-.view-gizmo-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.view-gizmo-title {
-  margin: 0;
-  color: #d8f2ff;
-  font: 800 11px/1 "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
-  letter-spacing: 0.38px;
-  text-transform: uppercase;
-}
-
 .view-gizmo-status {
-  margin: 0;
+  margin: 0 0 6px;
   color: #8fc7df;
   font: 700 11px/1 "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
 }
@@ -577,17 +609,25 @@ canvas {
     right: 10px;
   }
 
+  .panel-show-left,
+  .panel-show-right {
+    top: 10px;
+  }
+
+  .panel-show-left {
+    left: 10px;
+  }
+
+  .panel-show-right {
+    right: 10px;
+  }
+
   .tool-panel,
   .inspector-panel {
     width: min(320px, calc(100vw - 20px));
     max-height: calc(100vh - 20px);
   }
 
-  .view-gizmo {
-    left: 10px;
-    bottom: 10px;
-    width: min(206px, calc(100vw - 20px));
-  }
 }
 
 @media (max-width: 700px) {

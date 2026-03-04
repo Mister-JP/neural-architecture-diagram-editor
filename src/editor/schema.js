@@ -463,7 +463,7 @@ function normalizeScene(scene) {
   };
 }
 
-export function normalizeDocument(rawDocument) {
+export function normalizeDocument(rawDocument, { allowEmptyElements = false } = {}) {
   const source = rawDocument && typeof rawDocument === "object" ? rawDocument : {};
   const normalized = {
     version: DOCUMENT_VERSION,
@@ -473,7 +473,7 @@ export function normalizeDocument(rawDocument) {
       : []
   };
 
-  if (normalized.elements.length === 0) {
+  if (!allowEmptyElements && normalized.elements.length === 0) {
     normalized.elements.push(createDefaultElement(ELEMENT_TYPES.tensor));
   }
 

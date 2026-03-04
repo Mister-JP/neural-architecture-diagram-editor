@@ -4,19 +4,41 @@ import { ArchitectureEditor } from "./editor/ArchitectureEditor.js";
 import { ElementPreview } from "./editor/ElementPreview.js";
 import {
   ELEMENT_TYPES,
+  createDefaultDocument,
   createDefaultElement,
   normalizeDocument
 } from "./editor/schema.js";
-import defaultArchitectureDocument from "./config/default-architecture.json";
+import defaultArchitectureDocument from "./config/U-NetArchitecture-compact.json";
 
 const MAX_EXPORT_RESOLUTION = 32768;
+const LEGACY_DEMO_FILE_PATTERN = /-old\d*\.json$/i;
+
+function formatDemoOptionLabel(fileName) {
+  const baseName = fileName.replace(/\.json$/i, "");
+  const withoutPrefix = baseName.replace(/^u-netarchitecture/i, "U-Net");
+  return withoutPrefix.replace(/-/g, " ");
+}
+
+function createBlankDocument() {
+  const base = createDefaultDocument();
+  return {
+    version: base.version,
+    scene: clone(base.scene),
+    elements: []
+  };
+}
+
 const demoArchitectureDocuments = Object.entries(
   import.meta.glob("./config/*.json", { eager: true, import: "default" })
 )
   .map(([modulePath, documentData]) => ({
     fileName: modulePath.split("/").pop() || modulePath,
-    documentData
+    documentData,
+    label: formatDemoOptionLabel(modulePath.split("/").pop() || modulePath)
   }))
+  .filter(
+    (demo) => demo.fileName !== "default-architecture.json" && !LEGACY_DEMO_FILE_PATTERN.test(demo.fileName)
+  )
   .sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { sensitivity: "base" }));
 
 function clone(value) {
@@ -97,7 +119,7 @@ function buildSmartArchitectureFileName(documentData) {
 }
 
 function resolveUserFileName(defaultName) {
-  const enteredName = window.prompt("Save architecture as:", defaultName);
+  const enteredName = window.prompt("Save project as:", defaultName);
   if (enteredName == null) {
     return null;
   }
@@ -479,6 +501,9 @@ let loadModalOverlay;
 let loadModalSourceView;
 let loadModalDemoView;
 let loadModalDemoSelect;
+let startModalOverlay;
+let startModalCancelButton;
+let startModalCanCancel = false;
 let viewModeStatus;
 let viewPlaneButtons = {};
 let exportRegionStatus;
@@ -516,7 +541,7 @@ function syncViewPlaneControls(editor) {
 }
 
 function applyLoadedArchitecture(editor, documentData, leftPanel, leftShowButton) {
-  const normalized = normalizeDocument(documentData);
+  const normalized = normalizeDocument(documentData, { allowEmptyElements: true });
   editor.loadDocument(normalized, { selectFirst: false, emitDocumentChange: true, captureUndo: true });
   backgroundInput.value = normalized.scene.background;
   setGlobalBackground(normalized.scene.background);
@@ -532,6 +557,30 @@ function applyLoadedArchitecture(editor, documentData, leftPanel, leftShowButton
   hideRightPanel();
   leftPanel.classList.remove("panel-hidden");
   leftShowButton.hidden = true;
+}
+
+function saveProjectDocument(editor) {
+  const exported = editor.exportDocument();
+  const suggestedName = buildSmartArchitectureFileName(exported);
+  const fileName = resolveUserFileName(suggestedName);
+  if (!fileName) {
+    return;
+  }
+  downloadTextFile(
+    JSON.stringify(exported, null, 2),
+    fileName,
+    "application/json"
+  );
+}
+
+function startWithCompactTemplate(editor, leftPanel, leftShowButton) {
+  applyLoadedArchitecture(editor, clone(defaultArchitectureDocument), leftPanel, leftShowButton);
+  closeStartModal({ force: true });
+}
+
+function startWithBlankCanvas(editor, leftPanel, leftShowButton) {
+  applyLoadedArchitecture(editor, createBlankDocument(), leftPanel, leftShowButton);
+  closeStartModal({ force: true });
 }
 
 function closeLoadModal() {
@@ -562,6 +611,46 @@ function showLoadDemoView() {
   loadModalDemoView.hidden = false;
   loadModalDemoSelect.selectedIndex = demoArchitectureDocuments.length ? 0 : -1;
   loadModalDemoSelect.focus();
+}
+
+function closeStartModal({ force = false } = {}) {
+  if (!startModalOverlay) {
+    return;
+  }
+  if (!force && !startModalCanCancel) {
+    return;
+  }
+  startModalOverlay.hidden = true;
+  startModalOverlay.classList.remove("active");
+}
+
+function openStartModal({ canCancel = false } = {}) {
+  if (!startModalOverlay || !startModalCancelButton) {
+    return;
+  }
+  startModalCanCancel = canCancel;
+  startModalCancelButton.hidden = !canCancel;
+  startModalOverlay.hidden = false;
+  startModalOverlay.classList.add("active");
+}
+
+function createToolSection(title, hint = "") {
+  const section = document.createElement("section");
+  section.className = "panel-section";
+
+  const heading = document.createElement("h3");
+  heading.className = "section-title";
+  heading.textContent = title;
+  section.appendChild(heading);
+
+  if (hint) {
+    const hintText = document.createElement("p");
+    hintText.className = "section-hint";
+    hintText.textContent = hint;
+    section.appendChild(hintText);
+  }
+
+  return section;
 }
 
 function disableCurveHandleEditing(editor) {
@@ -1870,7 +1959,7 @@ leftHeader.className = "panel-header";
 
 const leftTitle = document.createElement("h2");
 leftTitle.className = "panel-title";
-leftTitle.textContent = "Architecture Tools";
+leftTitle.textContent = "Neural Diagram Editor";
 
 const leftHideButton = createButton("Hide", { className: "panel-toggle" });
 leftHideButton.addEventListener("click", () => {
@@ -1880,27 +1969,65 @@ leftHideButton.addEventListener("click", () => {
 
 leftHeader.append(leftTitle, leftHideButton);
 
-const createTensorButton = createButton("[] Create Tensor", {
-  title: "Create a tensor volume"
+const projectSection = createToolSection("Project", "Start new, open, or save your diagram.");
+const projectButtons = document.createElement("div");
+projectButtons.className = "button-row";
+
+const newProjectButton = createButton("New", { className: "tool-button compact" });
+newProjectButton.title = "Start a new diagram";
+newProjectButton.addEventListener("click", () => {
+  openStartModal({ canCancel: true });
+});
+
+const openProjectButton = createButton("Open Project", { className: "tool-button compact" });
+openProjectButton.title = "Open a project JSON (replaces current canvas)";
+openProjectButton.addEventListener("click", () => {
+  openLoadModal();
+});
+
+const saveProjectButton = createButton("Save Project (.json)");
+saveProjectButton.addEventListener("click", () => {
+  saveProjectDocument(editor);
+});
+
+projectButtons.append(newProjectButton, openProjectButton);
+projectSection.append(projectButtons, saveProjectButton);
+
+const addElementsSection = createToolSection("Add Elements", "Pick a building block, then place it from the inspector.");
+
+const createTensorButton = createButton("Add Layer Block", {
+  title: "Add a tensor volume"
 });
 createTensorButton.addEventListener("click", () => openCreateInspector(ELEMENT_TYPES.tensor, editor));
 
-const createArrowButton = createButton("-> Create Arrow", {
-  title: "Create an arrow connector"
+const createArrowButton = createButton("Add Connection", {
+  title: "Add an arrow connector"
 });
 createArrowButton.addEventListener("click", () => openCreateInspector(ELEMENT_TYPES.arrow, editor));
 
-const createLabelButton = createButton("T Create Label", {
-  title: "Create a label"
+const createLabelButton = createButton("Add Text Label", {
+  title: "Add a label"
 });
 createLabelButton.addEventListener("click", () => openCreateInspector(ELEMENT_TYPES.label, editor));
 
-const createFrustumButton = createButton("[] Create Frustum", {
-  title: "Create a truncated square pyramid"
+const createFrustumButton = createButton("Add Camera Frustum", {
+  title: "Add a truncated square pyramid"
 });
 createFrustumButton.addEventListener("click", () => openCreateInspector(ELEMENT_TYPES.frustum, editor));
 
-duplicateButton = createButton("Duplicate Selected");
+addElementsSection.append(
+  createTensorButton,
+  createArrowButton,
+  createLabelButton,
+  createFrustumButton
+);
+
+const arrangeSection = createToolSection(
+  "Arrange",
+  "Move, rotate, duplicate, or fit your current selection."
+);
+
+duplicateButton = createButton("Duplicate");
 duplicateButton.disabled = true;
 duplicateButton.addEventListener("click", () => {
   editor.duplicateSelected();
@@ -1934,15 +2061,77 @@ rotateModeButton.addEventListener("click", () => {
 transformSection.append(moveModeButton, rotateModeButton);
 applyTransformModeButtonState("translate");
 
-const fitViewButton = createButton("Fit View");
+const fitViewButton = createButton("Fit to Content");
 fitViewButton.addEventListener("click", () => editor.fitView());
 
-const sceneSection = document.createElement("div");
-sceneSection.className = "panel-section";
+arrangeSection.append(duplicateButton, undoButton, transformSection, fitViewButton);
 
-const sceneHeading = document.createElement("h3");
-sceneHeading.className = "section-title";
-sceneHeading.textContent = "Scene";
+const viewSection = createToolSection("View", "Align camera by axis or lock to a plane.");
+
+viewModeStatus = document.createElement("p");
+viewModeStatus.className = "view-gizmo-status";
+viewModeStatus.textContent = "3D free";
+
+const axisButtonRow = document.createElement("div");
+axisButtonRow.className = "view-gizmo-row";
+
+const alignXButton = createButton("X", { className: "view-gizmo-button" });
+const alignYButton = createButton("Y", { className: "view-gizmo-button" });
+const alignZButton = createButton("Z", { className: "view-gizmo-button" });
+
+alignXButton.addEventListener("click", () => {
+  editor.alignViewToAxis("X");
+  syncViewPlaneControls(editor);
+});
+alignYButton.addEventListener("click", () => {
+  editor.alignViewToAxis("Y");
+  syncViewPlaneControls(editor);
+});
+alignZButton.addEventListener("click", () => {
+  editor.alignViewToAxis("Z");
+  syncViewPlaneControls(editor);
+});
+
+axisButtonRow.append(alignXButton, alignYButton, alignZButton);
+
+const planeButtonRow = document.createElement("div");
+planeButtonRow.className = "view-gizmo-row";
+
+const xyPlaneButton = createButton("XY", { className: "view-gizmo-button" });
+const yzPlaneButton = createButton("YZ", { className: "view-gizmo-button" });
+const xzPlaneButton = createButton("XZ", { className: "view-gizmo-button" });
+
+viewPlaneButtons = {
+  XY: xyPlaneButton,
+  YZ: yzPlaneButton,
+  XZ: xzPlaneButton
+};
+
+for (const [plane, button] of Object.entries(viewPlaneButtons)) {
+  button.addEventListener("click", () => {
+    if (editor.getViewPlane() === plane) {
+      editor.clearViewPlane();
+    } else {
+      editor.setViewPlane(plane);
+    }
+    syncViewPlaneControls(editor);
+  });
+}
+
+planeButtonRow.append(xyPlaneButton, yzPlaneButton, xzPlaneButton);
+
+const clearPlaneButton = createButton("Return to 3D", {
+  className: "view-gizmo-button view-gizmo-button-accent"
+});
+clearPlaneButton.addEventListener("click", () => {
+  editor.clearViewPlane();
+  syncViewPlaneControls(editor);
+});
+
+viewSection.append(viewModeStatus, axisButtonRow, planeButtonRow, clearPlaneButton);
+syncViewPlaneControls(editor);
+
+const exportSection = createToolSection("Export", "Set size, optionally crop, then export an image.");
 
 const backgroundRow = createFieldRow("Background");
 backgroundInput = document.createElement("input");
@@ -2028,32 +2217,7 @@ exportRegionControls.append(
 );
 exportRegionRow.appendChild(exportRegionControls);
 
-sceneSection.append(sceneHeading, backgroundRow, exportResolutionRow, exportRegionRow);
-
-const fileActions = document.createElement("div");
-fileActions.className = "button-row";
-
-const exportJsonButton = createButton("Save", { className: "tool-button compact" });
-exportJsonButton.addEventListener("click", () => {
-  const exported = editor.exportDocument();
-  const suggestedName = buildSmartArchitectureFileName(exported);
-  const fileName = resolveUserFileName(suggestedName);
-  if (!fileName) {
-    return;
-  }
-  downloadTextFile(
-    JSON.stringify(exported, null, 2),
-    fileName,
-    "application/json"
-  );
-});
-
-const importJsonButton = createButton("Load", { className: "tool-button compact" });
-importJsonButton.addEventListener("click", () => {
-  openLoadModal();
-});
-
-const exportImageButton = createButton("Export PNG", { className: "tool-button compact full-row" });
+const exportImageButton = createButton("Export PNG");
 exportImageButton.title = "Export current camera view as PNG";
 exportImageButton.addEventListener("click", () => {
   try {
@@ -2071,7 +2235,25 @@ exportImageButton.addEventListener("click", () => {
   }
 });
 
-fileActions.append(exportJsonButton, importJsonButton, exportImageButton);
+exportSection.append(exportResolutionRow, exportRegionRow, exportImageButton);
+
+const canvasSettingsSection = document.createElement("details");
+canvasSettingsSection.className = "panel-section panel-section-collapsible";
+canvasSettingsSection.open = false;
+
+const canvasSettingsSummary = document.createElement("summary");
+canvasSettingsSummary.className = "section-summary";
+canvasSettingsSummary.textContent = "Canvas Settings";
+
+const canvasSettingsHint = document.createElement("p");
+canvasSettingsHint.className = "section-hint";
+canvasSettingsHint.textContent = "Background and scene-level appearance controls.";
+
+const canvasSettingsBody = document.createElement("div");
+canvasSettingsBody.className = "collapsible-content";
+canvasSettingsBody.append(backgroundRow);
+
+canvasSettingsSection.append(canvasSettingsSummary, canvasSettingsHint, canvasSettingsBody);
 
 importInput = document.createElement("input");
 importInput.type = "file";
@@ -2102,14 +2284,14 @@ const loadModal = document.createElement("div");
 loadModal.className = "load-modal";
 loadModal.setAttribute("role", "dialog");
 loadModal.setAttribute("aria-modal", "true");
-loadModal.setAttribute("aria-label", "Load architecture");
+loadModal.setAttribute("aria-label", "Open project");
 
 const loadModalHeader = document.createElement("div");
 loadModalHeader.className = "load-modal-header";
 
 const loadModalTitle = document.createElement("h3");
 loadModalTitle.className = "load-modal-title";
-loadModalTitle.textContent = "Load Architecture";
+loadModalTitle.textContent = "Open Project";
 
 const loadModalCloseButton = createButton("Close", { className: "load-modal-close" });
 loadModalCloseButton.addEventListener("click", () => {
@@ -2122,18 +2304,18 @@ loadModalSourceView.className = "load-modal-view";
 
 const loadModalSourceHint = document.createElement("p");
 loadModalSourceHint.className = "load-modal-hint";
-loadModalSourceHint.textContent = "Choose where to load the architecture from.";
+loadModalSourceHint.textContent = "Choose a source. Opening a project replaces the current canvas.";
 
-const loadFromDemoButton = createButton("Demo Projects", { className: "load-modal-button" });
+const loadFromDemoButton = createButton("Template Projects", { className: "load-modal-button" });
 loadFromDemoButton.addEventListener("click", () => {
   if (!demoArchitectureDocuments.length) {
-    window.alert("No demo JSON files were found in src/config.");
+    window.alert("No template JSON files were found in src/config.");
     return;
   }
   showLoadDemoView();
 });
 
-const loadFromComputerButton = createButton("Computer JSON", { className: "load-modal-button" });
+const loadFromComputerButton = createButton("From Computer (.json)", { className: "load-modal-button" });
 loadFromComputerButton.addEventListener("click", () => {
   closeLoadModal();
   importInput.click();
@@ -2147,7 +2329,7 @@ loadModalDemoView.hidden = true;
 
 const loadModalDemoHint = document.createElement("p");
 loadModalDemoHint.className = "load-modal-hint";
-loadModalDemoHint.textContent = "Select a demo architecture file from src/config.";
+loadModalDemoHint.textContent = "Select a template project.";
 
 loadModalDemoSelect = document.createElement("select");
 loadModalDemoSelect.className = "field-input load-modal-select";
@@ -2156,25 +2338,19 @@ loadModalDemoSelect.size = Math.min(8, Math.max(3, demoArchitectureDocuments.len
 for (const demo of demoArchitectureDocuments) {
   const option = document.createElement("option");
   option.value = demo.fileName;
-  option.textContent = demo.fileName;
+  option.textContent = demo.label;
   loadModalDemoSelect.appendChild(option);
 }
 
 const loadModalDemoActions = document.createElement("div");
 loadModalDemoActions.className = "load-modal-actions";
 
-const loadDemoBackButton = createButton("Back", { className: "load-modal-button subtle" });
-loadDemoBackButton.addEventListener("click", () => {
-  loadModalDemoView.hidden = true;
-  loadModalSourceView.hidden = false;
-});
-
-const loadDemoConfirmButton = createButton("Load Selected Demo", { className: "load-modal-button" });
+const loadDemoConfirmButton = createButton("Open Selected Template", { className: "load-modal-button" });
 loadDemoConfirmButton.addEventListener("click", () => {
   const selectedName = loadModalDemoSelect.value;
   const selectedDemo = demoArchitectureDocuments.find((demo) => demo.fileName === selectedName);
   if (!selectedDemo) {
-    window.alert("Choose a demo file to continue.");
+    window.alert("Choose a template project to continue.");
     return;
   }
 
@@ -2186,7 +2362,7 @@ loadDemoConfirmButton.addEventListener("click", () => {
   }
 });
 
-loadModalDemoActions.append(loadDemoBackButton, loadDemoConfirmButton);
+loadModalDemoActions.append(loadDemoConfirmButton);
 loadModalDemoView.append(loadModalDemoHint, loadModalDemoSelect, loadModalDemoActions);
 
 loadModal.append(loadModalHeader, loadModalSourceView, loadModalDemoView);
@@ -2198,27 +2374,83 @@ loadModalOverlay.addEventListener("click", (event) => {
   }
 });
 
+startModalOverlay = document.createElement("div");
+startModalOverlay.className = "load-modal-overlay";
+startModalOverlay.hidden = true;
+
+const startModal = document.createElement("div");
+startModal.className = "load-modal";
+startModal.setAttribute("role", "dialog");
+startModal.setAttribute("aria-modal", "true");
+startModal.setAttribute("aria-label", "Start a new diagram");
+
+const startModalHeader = document.createElement("div");
+startModalHeader.className = "load-modal-header";
+
+const startModalTitle = document.createElement("h3");
+startModalTitle.className = "load-modal-title";
+startModalTitle.textContent = "Start Your Diagram";
+
+startModalCancelButton = createButton("Cancel", { className: "load-modal-close" });
+startModalCancelButton.hidden = true;
+startModalCancelButton.addEventListener("click", () => {
+  closeStartModal();
+});
+
+startModalHeader.append(startModalTitle, startModalCancelButton);
+
+const startModalView = document.createElement("div");
+startModalView.className = "load-modal-view";
+
+const startModalHint = document.createElement("p");
+startModalHint.className = "load-modal-hint";
+startModalHint.textContent = "Start from a template or blank canvas. Opening a project replaces the current canvas.";
+
+const startCompactButton = createButton("Compact U-Net (Recommended)", {
+  className: "load-modal-button"
+});
+startCompactButton.addEventListener("click", () => {
+  startWithCompactTemplate(editor, leftPanel, leftShowButton);
+});
+
+const startBlankButton = createButton("Blank Canvas", { className: "load-modal-button" });
+startBlankButton.addEventListener("click", () => {
+  startWithBlankCanvas(editor, leftPanel, leftShowButton);
+});
+
+const startOpenButton = createButton("Open Project (.json)", { className: "load-modal-button" });
+startOpenButton.addEventListener("click", () => {
+  closeStartModal({ force: true });
+  openLoadModal();
+});
+
+startModalView.append(startModalHint, startCompactButton, startBlankButton, startOpenButton);
+startModal.append(startModalHeader, startModalView);
+startModalOverlay.appendChild(startModal);
+
+startModalOverlay.addEventListener("click", (event) => {
+  if (event.target === startModalOverlay) {
+    closeStartModal();
+  }
+});
+
 const leftHelp = document.createElement("p");
 leftHelp.className = "panel-help";
 leftHelp.textContent =
-  "Shift+click to multi-select. Undo with Cmd/Ctrl+Z. Double-click a rotate axis to snap 90°. Move mode shows temporary alignment guides and snapping.";
+  "Tip: Shift+click to multi-select. Double-click a rotate axis to snap 90deg.";
 
 leftPanel.append(
   leftHeader,
-  createTensorButton,
-  createArrowButton,
-  createLabelButton,
-  createFrustumButton,
-  duplicateButton,
-  undoButton,
-  transformSection,
-  fitViewButton,
-  sceneSection,
-  fileActions,
+  projectSection,
+  addElementsSection,
+  arrangeSection,
+  viewSection,
+  exportSection,
+  canvasSettingsSection,
   leftHelp
 );
 
-const leftShowButton = createButton("Show Tools", { className: "panel-show-button" });
+const leftShowButton = createButton("Show Menu", { className: "panel-show-button panel-show-left" });
 leftShowButton.hidden = true;
 leftShowButton.addEventListener("click", () => {
   leftPanel.classList.remove("panel-hidden");
@@ -2312,94 +2544,20 @@ inspectorDeleteButton.addEventListener("click", () => {
 
 rightPanel.append(
   rightHeader,
+  inspectorActionButton,
   previewContainer,
   curveHandleStatus,
   inspectorFields,
-  inspectorActionButton,
   inspectorDeleteButton
 );
 
-rightPanelShowButton = createButton("Show Inspector", { className: "panel-show-button" });
+rightPanelShowButton = createButton("Show Inspector", {
+  className: "panel-show-button panel-show-right"
+});
 rightPanelShowButton.hidden = true;
 rightPanelShowButton.addEventListener("click", showRightPanel);
 
 rightDock.append(rightPanel, rightPanelShowButton);
-
-const viewGizmo = document.createElement("section");
-viewGizmo.className = "view-gizmo";
-
-const viewGizmoHeader = document.createElement("div");
-viewGizmoHeader.className = "view-gizmo-header";
-
-const viewGizmoTitle = document.createElement("p");
-viewGizmoTitle.className = "view-gizmo-title";
-viewGizmoTitle.textContent = "View Gizmo";
-
-viewModeStatus = document.createElement("p");
-viewModeStatus.className = "view-gizmo-status";
-viewModeStatus.textContent = "3D free";
-
-viewGizmoHeader.append(viewGizmoTitle, viewModeStatus);
-
-const axisButtonRow = document.createElement("div");
-axisButtonRow.className = "view-gizmo-row";
-
-const alignXButton = createButton("X", { className: "view-gizmo-button" });
-const alignYButton = createButton("Y", { className: "view-gizmo-button" });
-const alignZButton = createButton("Z", { className: "view-gizmo-button" });
-
-alignXButton.addEventListener("click", () => {
-  editor.alignViewToAxis("X");
-  syncViewPlaneControls(editor);
-});
-alignYButton.addEventListener("click", () => {
-  editor.alignViewToAxis("Y");
-  syncViewPlaneControls(editor);
-});
-alignZButton.addEventListener("click", () => {
-  editor.alignViewToAxis("Z");
-  syncViewPlaneControls(editor);
-});
-
-axisButtonRow.append(alignXButton, alignYButton, alignZButton);
-
-const planeButtonRow = document.createElement("div");
-planeButtonRow.className = "view-gizmo-row";
-
-const xyPlaneButton = createButton("XY", { className: "view-gizmo-button" });
-const yzPlaneButton = createButton("YZ", { className: "view-gizmo-button" });
-const xzPlaneButton = createButton("XZ", { className: "view-gizmo-button" });
-
-viewPlaneButtons = {
-  XY: xyPlaneButton,
-  YZ: yzPlaneButton,
-  XZ: xzPlaneButton
-};
-
-for (const [plane, button] of Object.entries(viewPlaneButtons)) {
-  button.addEventListener("click", () => {
-    if (editor.getViewPlane() === plane) {
-      editor.clearViewPlane();
-    } else {
-      editor.setViewPlane(plane);
-    }
-    syncViewPlaneControls(editor);
-  });
-}
-
-planeButtonRow.append(xyPlaneButton, yzPlaneButton, xzPlaneButton);
-
-const clearPlaneButton = createButton("3D", {
-  className: "view-gizmo-button view-gizmo-button-accent"
-});
-clearPlaneButton.addEventListener("click", () => {
-  editor.clearViewPlane();
-  syncViewPlaneControls(editor);
-});
-
-viewGizmo.append(viewGizmoHeader, axisButtonRow, planeButtonRow, clearPlaneButton);
-
-syncViewPlaneControls(editor);
 
 exportSelectionOverlay = document.createElement("div");
 exportSelectionOverlay.className = "export-selection-overlay";
@@ -2594,9 +2752,9 @@ window.addEventListener("contextmenu", (event) => {
 document.body.append(
   leftDock,
   rightDock,
-  viewGizmo,
   importInput,
   loadModalOverlay,
+  startModalOverlay,
   exportSelectionOverlay
 );
 
@@ -2605,8 +2763,14 @@ openCreateInspector(ELEMENT_TYPES.tensor, editor);
 setExportCrop(null);
 setExportSelectionMode(false);
 app.start();
+openStartModal({ canCancel: false });
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && startModalOverlay && !startModalOverlay.hidden) {
+    closeStartModal();
+    return;
+  }
+
   if (event.key === "Escape" && loadModalOverlay && !loadModalOverlay.hidden) {
     closeLoadModal();
     return;

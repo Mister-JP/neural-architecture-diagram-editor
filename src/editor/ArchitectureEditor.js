@@ -271,7 +271,7 @@ export class ArchitectureEditor {
       this.recordUndoSnapshot();
     }
 
-    const normalized = normalizeDocument(rawDocument);
+    const normalized = normalizeDocument(rawDocument, { allowEmptyElements: true });
 
     this.document = {
       version: normalized.version,

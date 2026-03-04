@@ -6,7 +6,7 @@ The app is a JSON-driven Three.js editor for neural-network diagram composition.
 
 ## Core Modules
 
-- `src/main.js`: app bootstrap, panel UI wiring, create/edit flows, load/save/export actions, and view gizmo controls.
+- `src/main.js`: app bootstrap, panel UI wiring (`Project`, `Add Elements`, `Arrange`, `View`, `Export`, `Canvas Settings`), start/open modal flows, and import/export actions.
 - `src/core/SceneApp.js`: renderer/camera/orbit-controls shell and raster export support.
 - `src/editor/ArchitectureEditor.js`: document lifecycle, element instance management, selection, transforms, undo history, and scene overlays.
 - `src/editor/schema.js`: default document factory, per-type defaults, normalization/clamping, and element/document helpers.
@@ -36,6 +36,7 @@ The app is a JSON-driven Three.js editor for neural-network diagram composition.
   - sanitizes color/vector inputs
   - enforces defaults
   - guarantees IDs
+- `normalizeDocument(raw, { allowEmptyElements: true })` is used by startup/new/load flows that intentionally allow a blank canvas (`elements: []`).
 
 ## Interaction Model
 
@@ -44,7 +45,7 @@ The app is a JSON-driven Three.js editor for neural-network diagram composition.
 - `TransformControls` drives translate/rotate workflows.
 - Double-clicking a rotate axis snaps rotation to 90-degree increments.
 - Move mode provides temporary alignment guides and snapping against other selected/non-selected element anchors.
-- View gizmo supports axis alignment (`X`, `Y`, `Z`) and plane locking (`XY`, `YZ`, `XZ`) with restore back to free 3D view.
+- The **View** section supports axis alignment (`X`, `Y`, `Z`) and plane locking (`XY`, `YZ`, `XZ`) with restore back to free 3D view.
 - Curved arrows expose an optional direct control handle.
 - Tensor convolution kernels can expose an interactive kernel handle for offset editing.
 
@@ -52,7 +53,8 @@ The app is a JSON-driven Three.js editor for neural-network diagram composition.
 
 - JSON save/load uses normalized document round-tripping.
 - Load flow supports:
-  - bundled demos from `src/config/*.json`
+  - first-launch/new-project choices (`Compact U-Net`, `Blank Canvas`, or open project)
+  - bundled templates from `src/config/*.json` (legacy `*-old*.json` files are hidden from the template picker)
   - user-provided JSON files
 - Image export supports:
   - PNG output

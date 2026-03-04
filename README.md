@@ -13,11 +13,13 @@ A JSON-driven Three.js editor for building neural-network style architecture dia
 - Model tensor convolution relationships using `parentTensorId` with kernel and pyramid projection overlays.
 - Use arrow variants: `3d`, `2d`, `dotted`, and `curved` (with optional direct curve handle editing).
 - Multi-select with `Shift+Click`, then move/rotate selected elements, duplicate, delete, and undo (`Cmd/Ctrl+Z`).
-- Use the view gizmo to align camera to `X/Y/Z`, lock to `XY/YZ/XZ` plane views, and return to free `3D`.
+- Use the **View** section in the left menu to align camera to `X/Y/Z`, lock to `XY/YZ/XZ` plane views, and return to free `3D`.
 - Use live alignment guides and snapping while moving elements.
-- Hide/show both side panels to maximize canvas space.
-- Load demo projects from `src/config/*.json` or import JSON from your computer.
-- Save JSON, reload later, and export PNG at custom resolution with optional crop region selection.
+- Start from a first-launch scaffold: `Compact U-Net (Recommended)`, `Blank Canvas`, or `Open Project (.json)`.
+- Use the **Project** section for `New`, `Open Project`, and `Save Project (.json)`.
+- Hide/show both side panels to maximize canvas space, with fixed top-corner `Show Menu` and `Show Inspector` buttons.
+- Open bundled template projects or import JSON from your computer.
+- Save project JSON and export PNG at custom resolution with optional crop region selection.
 
 ## Quick Start
 
@@ -41,8 +43,8 @@ npm run preview
 - `src/editor/elements/*`: element implementations (`TensorElement`, `ArrowElement`, `LabelElement`, `FrustumElement`)
 - `src/editor/TensorRelationOverlay.js`: parent-kernel-pyramid relation renderer between tensors
 - `src/editor/ElementPreview.js`: inspector preview renderer
-- `src/config/default-architecture.json`: default starter document
-- `src/config/U-NetArchitecture.json`: bundled example architecture
+- `src/config/U-NetArchitecture-compact.json`: default startup template
+- `src/config/*.json`: bundled template projects shown in `Open Project` (with legacy `*-old*.json` files filtered from the picker)
 - `docs/ARCHITECTURE.md`: technical architecture reference
 
 ## JSON Document Shape
