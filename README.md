@@ -1,6 +1,6 @@
 # Neural Architecture Editor (Three.js)
 
-Live demo: https://Mister-JP.github.io/procedural-architecture-diagram/
+Live demo: https://Mister-JP.github.io/neural-architecture-diagram-editor/
 
 A JSON-driven Three.js editor for building neural-network style architecture diagrams from reusable 3D elements.
 
